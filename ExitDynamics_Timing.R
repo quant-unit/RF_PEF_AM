@@ -247,13 +247,13 @@ timing$ParaCoxRegression <- function(public.data, data_LoLi){
     # 95% Conf_Intervals
     # https://stats.stackexchange.com/questions/27033/in-r-given-an-output-from-optim-with-a-hessian-matrix-how-to-calculate-paramet
     
-    fisher_info <- solve(fit$hessian) # sign issue (maximization vs. minimization)
+    fisher_info <- solve(-fit$hessian) # sign issue (maximization vs. minimization)
 
     prop_sigma <- sqrt(diag(fisher_info))
     
     result <- data.frame(MLE = fit$par, SE = prop_sigma)
     result$t_value <- result$MLE / result$SE
-    result$p_value <- pnorm(-abs(result$t_value))
+    result$p_value <- pnorm(-abs(result$t_value)) * 2
 
     rownames(result) <- names(fit$par)
     

@@ -106,14 +106,14 @@ G.p2c$P2C.multi1.discounted <- G.p2c$P2C.multi1 / (G.p2c$MSCI.Multiple.Exit_1 + 
 sun(G.p2c$P2C.multi1.discounted)
 
 estimate.bi.model <- function(f.type) {
-  no.iterations <- 2
+  no.iterations <- 1000
   final.result <- list()
   
   # f.type <- "BO"
   response1 <- "P2C.multi1.discounted"
 
   predictors_0 <- c("RVPI_1","Holding_Period","ML_HYOAS.quarter", "MSCI.Multiple.Exit_1", "I(CMA.Index.Multi-1)")
-  predictors_1mu <- c("ML_HYOAS.quarter","MSCI.Multiple.Exit_1", "I(CMA.Index.Multi-1)", "Holding_Period")
+  predictors_1mu <- c("RVPI_1","Holding_Period", "Time2Exit", "ML_HYOAS.quarter", "MSCI.Multiple.Exit_1", "I(CMA.Index.Multi-1)")
   predictors_1sigma <- c("Holding_Period", "Time2Exit")
 
   formula0 <- as.formula(paste("hurdle0", paste(predictors_0, collapse=" + "), sep=" ~ "))
@@ -129,12 +129,12 @@ estimate.bi.model <- function(f.type) {
     m0.full <- gamlss(formula0, data = G.p2c[G.p2c$Fund_InvestTypes == f.type, !(colnames(G.p2c) %in% c("Ev", "Ev2", "MOIC.dyn", "MOIC.end"))], family = BI(mu.link = logit))
     m1.full <- gamlss(formula1, sigma.formula = formula1sigma, 
                       data = subset(G.p2c[, !(colnames(G.p2c) %in% c("Ev", "Ev2", "MOIC.dyn", "MOIC.end"))], 
-                                    hurdle0 == 1 & Fund_InvestTypes == f.type), family = GGtr)
+                                    hurdle0 == 1 & Fund_InvestTypes == f.type), family = GA)
     
     m0.entryexit <- gamlss(formula0, data = G.p2c[G.p2c$Holding_Period == 0 &  G.p2c$Fund_InvestTypes == f.type, !(colnames(G.p2c) %in% c("Ev", "Ev2", "MOIC.dyn", "MOIC.end"))], family = BI(mu.link = logit))
     m1.entryexit <- gamlss(formula1, sigma.formula = formula1sigma, 
                            data = subset(G.p2c[G.p2c$Holding_Period == 0, !(colnames(G.p2c) %in% c("Ev", "Ev2", "MOIC.dyn", "MOIC.end"))], 
-                                         hurdle0 == 1 & Fund_InvestTypes == f.type), family = GGtr)
+                                         hurdle0 == 1 & Fund_InvestTypes == f.type), family = GA)
     
     full.entry2exit.list$m0.full <- m0.full
     full.entry2exit.list$m1.full <- m1.full
@@ -145,6 +145,7 @@ estimate.bi.model <- function(f.type) {
   set.seed(99)
   iter.list <- list()
   for(i in 1:no.iterations) {
+    print(i)
     df <- sample.subset(f.type, G.p2c)
     # df$hurdle0 <- ifelse(df[,response1] > hurdle0, 1, 0)
     
@@ -324,10 +325,6 @@ estimate.bi.model <- function(f.type) {
     
     df.baic <- data.frame(rbind_all(combine(baic)))
     
-    
-    
-    
-    
     final.result <- list(coefs = coefs, BAIC = df.baic, CopDF = CopDF,
                          Iter = list(no.iterations = no.iterations, no.converged = length(iter.list)),
                          full.entry2exit = full.entry2exit.list)
@@ -339,8 +336,8 @@ if(TRUE) {
   system.time(vc.GA <- estimate.bi.model("VC"))
 } else {
   setwd(wd$csv)
-  # saveRDS(bo.GA, "bo.GA20181106.RDS")
-  # saveRDS(vc.GA, "vc.GA20181106.RDS")
+  # saveRDS(bo.GA, "bo.GA20200507.RDS")
+  # saveRDS(vc.GA, "vc.GA20200507.RDS")
   bo.GA <- readRDS("bo.GA20181026.RDS")
   vc.GA <- readRDS("vc.GA20181026.RDS")
 }
@@ -424,8 +421,10 @@ coef2part$VC$joe.para <- vc.GA$coefs$copCON$Mean
 copula2part$coef2part <- coef2part
 
 # Predict Multiple <<<< -------
-#df.out <- simulate$Timing.Simulator(simulate$create.sim.input(), simulate$create.public.scenario())
-#copula.in <- simulate$TM.copula(nrow(df.out), "Joe180", coef2part$VC$joe.para)
+setwd(wd$code)
+source("ExitDynamics_Bivariate.R")
+df.out <- simulate$Timing.Simulator(simulate$create.sim.input(), simulate$create.public.scenario())
+copula.in <- simulate$TM.copula(nrow(df.out), "Joe180", coef2part$VC$joe.para)
 
 copula2part$logit2prob <- function(logit){
   odds <- exp(logit)

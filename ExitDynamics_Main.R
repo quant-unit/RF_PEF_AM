@@ -4,9 +4,13 @@
 ## 0) Prologue -------
 
 rm(list=ls()) # remove workspace objects
-setwd("C:/Users/christian.tausch")
-setwd("/Users/christausch/")
-root <- file.path(getwd(), "Dropbox", "Project D", "3_R_Pro_D")
+#setwd("C:/Users/christian.tausch")
+#setwd("/Users/christausch/")
+#root <- file.path(getwd(), "Dropbox", "Project D", "3_R_Pro_D")
+root <- setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+setwd('..')
+setwd('..')
+root <- getwd()
 
 wd <- list()
 wd$code <- file.path(root, "Exit_Dynamics", "Code")
