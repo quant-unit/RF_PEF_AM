@@ -1,0 +1,22 @@
+#AssetLevelAnalysis 3.R
+#BS_portfolio_exit_simulation.R
+ExitDynamics_Preqin.R
+GAM_Multiple.R
+IntervalCensoredGammaFrailty.R
+Mixture Distributions.R
+
+ExitDynamics_Copula.R
+GAM_Multiple_v2.R
+GenGamma.R
+plm.R
+Read_Coefs.R
+ExitDynamics_Multiple.R
+
+# folders
+Data/
+CSV_output/
+EPS_output/
+EPS_output_small/
+data_in/
+data_out/
+outdated/

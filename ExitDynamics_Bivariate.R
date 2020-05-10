@@ -32,8 +32,6 @@ simulate$create.sim.input <- function(no_companies = 10, type = "VC",
 simulate$create.sim.input()
 
 ## B) Public Scenario  -----
-setwd(wd$data)
-# df.hist <- readRDS("df_hist.RDS")
 set.seed(99)
 public.data$Global.CMA <- rnorm(nrow(public.data),0,0.02)
 simulate$create.public.scenario <- function(periods = 12 * 20, upto = "2016-12-31"){
@@ -62,7 +60,6 @@ simulate$create.public.scenario <- function(periods = 12 * 20, upto = "2016-12-3
   return(out)
 }
 tail(simulate$create.public.scenario())
-
 
 
 ## 0) Bivariate / Dependence / Copula -------
@@ -213,6 +210,50 @@ simulate$df.out2cumcf <- function(df.out){
   return(cum.cf)
 }
 
+
+simulate$logit2prob <- function(logit){
+  odds <- exp(logit)
+  prob <- odds / (1 + odds)
+  return(prob)
+}
+
+simulate$predict.2part <- function(U.multiple, sim_in) {
+  multi.list <- list()
+  for(i in 1:nrow(sim_in)) {
+    fund.type <- as.character(sim_in[i, "Type"])
+    
+    names_zero <- names(copula2part$coef2part[[fund.type]]$m0mu)[-1]
+    x_zero <- as.numeric(c(1, sim_in[i, names_zero]))
+    m0mu <- copula2part$coef2part[[fund.type]]$m0mu %*% x_zero
+    
+    names_one <- names(copula2part$coef2part[[fund.type]]$m1mu)[-1]
+    x_one <- as.numeric(c(1, sim_in[i, names_one]))
+    m1mu <- copula2part$coef2part[[fund.type]]$m1mu %*% x_one
+    
+    names_sigma <- names(copula2part$coef2part[[fund.type]]$m1sigma)[-1]
+    m1sigma <- copula2part$coef2part[[fund.type]]$m1sigma %*% as.numeric(c(1, sim_in[i, names_sigma]))
+    
+    default.prob <- 1 - simulate$logit2prob(m0mu)
+    #  U <- U.multiple$Multiple[i]
+    U <- runif(1) # default and non-default are conditionally independent
+    
+    if (U > default.prob) {
+      # U.scaled <- (U - default.prob) / (1 - default.prob)
+      U.scaled <- U.multiple$Multiple[i]
+      multi <- gamlss.dist::qGA(U.scaled, mu = exp(m1mu), sigma = exp(m1sigma))
+    } else {
+      multi <- 0
+    }
+    multi.list[i] <- multi
+  }
+  return(as.numeric(unlist(multi.list)))
+}
+
+df.out <- simulate$Timing.Simulator(simulate$create.sim.input(), simulate$create.public.scenario())
+copula.in <- simulate$TM.copula(nrow(df.out), "Joe180", 1.1)
+
+simulate$predict.2part(copula.in, df.out)
+
 simulate$Final.Simulator <- function(iterations, N, Type, fixed.pub.sce = TRUE){
   all_out <- list()
   # fixed public scenario
@@ -242,7 +283,9 @@ simulate$Final.Simulator <- function(iterations, N, Type, fixed.pub.sce = TRUE){
         }
         
         # Copula
-        joe.para <- ifelse(df.companies$Type == "VC", coef2part$VC$joe.para, coef2part$BO$joe.para)
+        joe.para <- ifelse(df.companies$Type == "VC", 
+                           copula2part$coef2part$VC$joe.para,
+                           copula2part$coef2part$BO$joe.para)
         U.copula <- simulate$TM.copula(nrow(df.companies), corner, joe.para)
 
         # Timing 
@@ -251,12 +294,7 @@ simulate$Final.Simulator <- function(iterations, N, Type, fixed.pub.sce = TRUE){
                                    U.timing = U.copula$Timing)
         
         # Multiple
-        if(FALSE) {
-          df.out$Multiple <- multiple$predict_dgh(sim_out = TRUE,
-                                                  U.multiple = U.copula$Multiple,
-                                                  sim_in = df.out)
-        }
-        df.out$Multiple <- copula2part$predict.2part(U.multiple = U.copula, sim_in = df.out)
+        df.out$Multiple <- simulate$predict.2part(U.multiple = U.copula, sim_in = df.out)
         
         # Result
         # round_df(df.out, 3)
@@ -280,7 +318,3 @@ simulate$Final.Simulator <- function(iterations, N, Type, fixed.pub.sce = TRUE){
 x <- simulate$Final.Simulator(5, c(3, 15), "VC")
 
 
-## x) Attach new environment -----
-while("simulate" %in% search())
-  detach("simulate")
-attach(simulate)

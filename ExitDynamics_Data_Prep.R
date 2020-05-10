@@ -31,31 +31,17 @@ library(sgt)
 # library(xtable)
 # require(KernelKnn)
 
-##### ROOT -------------
-if(getwd() == "/Users/christausch/Dropbox/Project D/3_R_Pro_D/Exit_Dynamics/Code"){
-  computer <- "mac"
-}
-if(getwd() == "C:/Users/christian.tausch/Dropbox/Project D/3_R_Pro_D/Exit_Dynamics/Code"){
-  computer <- "win"
-}
-
-
 ## 1) read & prepare data (old) -----
 
-if(computer == "win") root <- "/Users/christian.tausch/Dropbox/Project D/3_R_Pro_D/Exit_Dynamics"
-if(computer == "mac") root <- "~/Dropbox/Project D/3_R_Pro_D/Exit_Dynamics"
+root <- setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
-code.wd <- paste(root, "Code", sep="/")
-data.wd <- paste(root, "Data", sep="/")
-eps.wd <-  paste(root, "EPS_output", sep="/")
-csv.wd <-  paste(root, "CSV_output", sep="/")
+data.in.wd <- paste(root, "data_in", sep="/")
+data.out.wd <- paste(root, "data_out", sep="/")
 
-setwd(code.wd)
 source("Useful_Functions.R")
 
-if(FALSE){
-  if(computer == "win") setwd("~/Data/Company Level/Gerd Export")
-  if(computer == "mac") setwd("~/Desktop/Company Level/Gerd Export")
+if(TRUE){
+  setwd(data.in.wd)
   G <- read.csv2("170601_export.csv")
   G$FundInv_Quarter <- as.Date(G$FundInv_Quarter,format="%d.%m.%y")
   G$Investment_Date <- as.Date(G$Investment_Date,format="%d.%m.%y")
@@ -96,7 +82,6 @@ if(FALSE){
   g.sum$GeoR <- (g.sum$MOIC)^(1/g.sum$HoPi)
   
   # Load Public Data
-  setwd(data.wd)
   trindex <- read.csv("TRindex.csv")
   trindex$Date <- as.Date(trindex$Date)
   hy_spreads <- read.csv("ML-HYOAS.csv")
@@ -191,9 +176,6 @@ if(FALSE){
   
   colnames(G2)
   
-  #if(computer == "win") setwd("C:/Users/christian.tausch/Dropbox/Project D")
-  #if(computer == "mac") setwd("~/Dropbox/Project D")
-  #gdp <- read.csv2("Cum GDP April 2017.csv",dec=".")
   G2$YearInvest <- as.numeric(format(G2$Investment_Date,"%Y"))
   G2$YearQuarter <- as.numeric(format(G2$FundInv_Quarter,"%Y"))
   G2 <- merge(G2,gdp[,c(1,4)],by.x = "YearQuarter",by.y="Year")
@@ -481,11 +463,6 @@ if(FALSE){
   quantile(G.p2c$P2C.multi1,seq(0,1,0.05),na.rm=TRUE)
   rm(cap,floor.fmv)
   
-  # merge GDP
-  # if(computer == "win") setwd("C:/Users/christian.tausch/Dropbox/Project D")
-  # if(computer == "mac") setwd("~/Dropbox/Project D")
-  # gdp <- read.csv2("Cum GDP April 2017.csv",dec=".")
-  
   '
   G.p2c$YearInvest <- as.numeric(format(G.p2c$Investment_Date,"%Y"))
   G.p2c$YearQuarter <- as.numeric(format(G.p2c$FundInv_Quarter,"%Y"))
@@ -542,13 +519,7 @@ if(FALSE){
   df_sector <- merge(df_sector,BO_m, by= "Sector",all.x= TRUE)
   
   rm(VC_m,BO_m)
-  # save.image("z_b2.RData")
-}else{
-  #### load workspace
-  setwd(data.wd)
-  load("z_b2.RData")
 }
-
 
 ## 2) Prep g.p2c ------
 colnames(G.p2c)
@@ -579,7 +550,6 @@ g.p2c2$Company_ID <- as.factor(sapply(strsplit(g.p2c2$Fund_Emi_ID, "_"), `[`, 2)
 
 
 ## 3) Prep g.sum ------
-g.sum <- G.sum
 g.sum$Timing <- ifelse(is.na(g.sum$HoPi),
                        as.numeric(as.Date("2016-12-31") - g.sum$InvDate)/365.25,
                        as.numeric(g.sum$ExitDate - g.sum$InvDate)/365.25)
@@ -616,16 +586,14 @@ public.data$MSCI_monthly_return <- c(NA,diff(public.data$MSCI.World.Net.Return.D
 as.Date(levels(as.factor(g.p2c2$FundInv_Quarter))) %in% public.data$Date
 
 # create output ------
-rm(list=setdiff(ls(), c("g.p2c2","public.data","g.sum","data.wd")))
+rm(list=setdiff(ls(), c("g.p2c2","public.data","g.sum","data.out.wd")))
 
 dev.off() # reset graphical parameters
 par_default <- par()
 
-setwd(data.wd)
-rm("data.wd")
+setwd(data.out.wd)
+rm("data.out.wd")
 
-# write.csv2(g.sum, "Static_Multiple_Timing2.csv")
-
-if(FALSE){
-  save.image("ExitDynamics_Data_V2.RData")
+if(TRUE){
+  save.image("ExitDynamics_Data_V3.RData")
 }

@@ -2,11 +2,7 @@
 ## Exit Dynamics: Main File
 ###########################
 ## 0) Prologue -------
-
 rm(list=ls()) # remove workspace objects
-#setwd("C:/Users/christian.tausch")
-#setwd("/Users/christausch/")
-#root <- file.path(getwd(), "Dropbox", "Project D", "3_R_Pro_D")
 root <- setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 setwd('..')
 setwd('..')
@@ -14,23 +10,33 @@ root <- getwd()
 
 wd <- list()
 wd$code <- file.path(root, "Exit_Dynamics", "Code")
-wd$data <- file.path(root, "Exit_Dynamics", "Code", "Data")
-wd$eps <-  file.path(root, "Exit_Dynamics", "Code", "EPS_output")
-wd$eps2 <-  file.path(root, "Exit_Dynamics", "Code", "EPS_output_small")
-wd$csv <-  file.path(root, "Exit_Dynamics", "Code", "CSV_output")
+#wd$data <- file.path(root, "Exit_Dynamics", "Code", "Data")
+wd$data.in <- file.path(root, "Exit_Dynamics", "Code", "data_in")
+wd$data.out <- file.path(root, "Exit_Dynamics", "Code", "data_out")
+wd$eps <-  file.path(root, "Exit_Dynamics", "Code", "eps_out")
+wd$eps2 <-  file.path(root, "Exit_Dynamics", "Code", "eps_out_small")
+#wd$csv <-  file.path(root, "Exit_Dynamics", "Code", "CSV_output")
 rm(root)
+dir.create(wd$eps)
 dir.create(wd$eps2)
 
 setwd(wd$code)
 source("Useful_Functions.R")
-source("ExitDynamics_Packages.R")
+library(dplyr)
 
-setwd(wd$data)
-load("ExitDynamics_Data_V1.RData")
-
-create.eps <- FALSE
+create.eps <- TRUE
 create.csv <- FALSE
-## 00) Reduce Input Data ------
+## 00) Load & Reduce Input Data ------
+if(TRUE) {
+  #source("ExitDynamics_Data_Prep.R")
+  setwd(wd$data.out)
+  load("ExitDynamics_Data_V3.RData")
+} else {
+  # old - outdated
+  setwd(wd$data)
+  load("ExitDynamics_Data_V1.RData")
+}
+
 g.p2c2 <- g.p2c2[g.p2c2$Fund_InvestTypes %in% c("BO", "VC"), ]
 colnames(g.p2c2)
 
@@ -70,7 +76,7 @@ rownames(df.enex) <- df.enex$Year
 df.enex$Year <- NULL
 xtable::xtable(df.enex)
 
-## 1) Timing   ------
+## 1) Timing ------
 par(par_default)
 setwd(wd$code)
 source("ExitDynamics_Timing.R")
@@ -78,23 +84,19 @@ source("ExitDynamics_Timing.R")
 # Non-Parametric Cox Regression (partial likelihood)
 np.cox <- timing$NonParaCoxRegression(g.p2c2)
 
-
-# Parametric Cox Regression
-setwd(wd$data)
-system.time(
-  # wb.cox <- timing$ParaCoxRegression(public.data, g.sum)
-  # saveRDS(wb.cox, "z_Para_Cox_Weibull5.rds")
-  wb.cox <- readRDS("z_Para_Cox_Weibull5.rds")
-)
-
-
-# create .csv output
-setwd(wd$csv)
+# create RDS & .csv output
+setwd(wd$data.out)
+if (FALSE) {
+  # Parametric Cox Regression
+  wb.cox <- timing$ParaCoxRegression(public.data, g.sum)
+  saveRDS(wb.cox, "Timing_Para_Cox_Weibull6.rds")
+} else {
+  wb.cox <- readRDS("Timing_Para_Cox_Weibull6.rds")
+}
 timing$CreateOutput(wb.cox, create.csv)
 
-
 # Create Plots
-if(FALSE){
+if(TRUE) {
   if(create.eps){
     setwd(wd$eps)
   }
@@ -113,84 +115,10 @@ if(FALSE){
   sun(uni.CDF.timing$VC, Ylim = c(0,2))
 }
 
-
-
 ## 2) Multiple -------
 par(par_default)
 setwd(wd$code)
-source("ExitDynamics_Multiple.R")
 source("ExitDynamics_Copula2.R")
-
-coef2part <- copula2part$coef2part
-
-if (FALSE) {
-  # Summary Statistics (How many observations, i.e. company IDs)
-  list(First_Entry_Date = min(G.p2c$Investment_Date),
-       BO_stochastic = nrow(multiple$creat_reg_df("BO", stochastic = TRUE)),
-       BO_first = nrow(multiple$creat_reg_df("BO", stochastic = FALSE)),
-       VC_stochastic = nrow(multiple$creat_reg_df("VC", stochastic = TRUE)),
-       VC_first = nrow(multiple$creat_reg_df("VC", stochastic = FALSE)) )
-  
-  
-  # Run Multiple Regressions
-  if(FALSE){
-    multi.reg <- list()
-    
-    for(type in c("BO","VC")){
-      for(iter in c(1, 500)){
-        set.seed(99)
-        multi.reg[[paste(type, iter, sep="_")]] <- multiple$MLE(iter, type)
-      }
-    }
-    
-    setwd(wd$data)
-    # saveRDS(multi.reg, "multi.reg2.RDS")
-  } else {
-    setwd(wd$data)
-    multi.reg <- readRDS("multi.reg2.RDS")
-  }
-  
-  # NB2 Model
-  sapply(multi.reg$BO_500$NB2, sun)
-  sapply(multi.reg$VC_500$NB2, sun)
-  
-  # Create .csv Output
-  setwd(wd$csv)
-  multi.reg.sum <- multiple$CreateOutput(multi.reg, create.csv)
-  
-  
-  # Plot color compound CDF
-  setwd(wd$eps)
-  set.seed(97)
-  multiple$predict_dgh(sim_out = TRUE, plot_it = TRUE, eps = create.eps, size = "big")
-  setwd(wd$eps2)
-  set.seed(97)
-  multiple$predict_dgh(sim_out = TRUE, plot_it = TRUE, eps = create.eps, size = "small")
-  
-}
-
-if(FALSE){
-  
-  # Plot dependent variables (Multiple)
-  setwd(wd$eps)
-  multiple$plot.multi.dist(create.eps)
-  
-  
-  system.time(
-    uni.CDF.multiple <- multiple$predict_dgh(sim_out = FALSE, plot_it = FALSE, eps = FALSE)
-  )
-  sun(uni.CDF.multiple, Ylim = c(0,2))
-  
-  multiple$DGH_Roseblatt(G.p2c, uni.CDF.multiple)
-  
-  plot.ecdf(uni.CDF.multiple)
-  abline(v = c(0,1), a = 0, b = 1, col = "grey", lty = 2)
-  points(seq(0,1,0.001), quantile(uni.CDF.multiple, seq(0,1,0.001)), col ="blue", pch = 20, cex = 0.7)
-  
-  # curve(truncdist::dtrunc(x, spec="gamma" ,a=0.1 ,b=5 ,shape=1.304 , scale= exp(1.405)/1.304), 0,6)
-  
-}
-
 
 ## 3) Empirical Plot & Visualize mMPP framework -----
 empirical.timing.multiple <- function(size = "big"){
@@ -409,8 +337,8 @@ source("ExitDynamics_Bivariate.R")
 
 set.seed(98)
 system.time(x <- simulate$Final.Simulator(5000, N = c(3, 15), "VC"))
-setwd(wd$data)
-# saveRDS(x, "test_simulation_result_newPubSce.RDS")
+setwd(wd$data.out)
+saveRDS(x, "test_simulation_result_newPubSce.RDS")
 x <- readRDS("test_simulation_result_newPubSce.RDS")
 
 tail(x$PublicScenario)
@@ -449,9 +377,9 @@ cf2quantiles <- function(list.in, no.companies) {
 df.3companies <- cf2quantiles(x$df.out$N_3$independent, 3)
 df.15companies <- cf2quantiles(x$df.out$N_15$independent, 15)
 
-if(FALSE) {
-  create.eps <- FALSE
+if(TRUE) {
   old.wd <- getwd()
+  create.eps <- FALSE 
   setwd(wd$eps)
   setEPS()
   postscript("Simulation-Combi.eps", 
@@ -477,7 +405,7 @@ for(pfs in names(x$Output)){
   x$CSV[[pfs]] <- df.summary
   
   if(create.csv){
-    setwd(wd$csv)
+    setwd(wd$data.out)
     write.csv(df.summary, file = paste("PoFo_",pfs,".csv",sep = ""), na = "", row.names = TRUE, dec = ".")
   }
 }

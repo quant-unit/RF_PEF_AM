@@ -247,7 +247,7 @@ timing$ParaCoxRegression <- function(public.data, data_LoLi){
     # 95% Conf_Intervals
     # https://stats.stackexchange.com/questions/27033/in-r-given-an-output-from-optim-with-a-hessian-matrix-how-to-calculate-paramet
     
-    fisher_info <- solve(-fit$hessian) # sign issue (maximization vs. minimization)
+    fisher_info <- solve(fit$hessian) # sign issue (maximization vs. minimization)
 
     prop_sigma <- sqrt(diag(fisher_info))
     
@@ -631,7 +631,3 @@ timing$TimingFormatedCSV <- function(para.in, non.para.in, make.csv = FALSE){
 }
 
 
-## x) Attach new environment -----
-#while("timing" %in% search())
-#  detach("timing")
-#attach(timing)

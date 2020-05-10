@@ -48,7 +48,7 @@ weibull.Surv("2002-12-31", "2011-03-31", "BO", 4, FALSE)
 
 
 ## Multiple - Data Prep -----------
-if(FALSE) {
+if(TRUE) {
   G.p2c <- g.p2c2 # data set used for timing regression
   
   G.p2c <- G.p2c[!is.na(G.p2c$P2C.multi1),] # JUST EXITED INVESTMENTS
@@ -56,7 +56,7 @@ if(FALSE) {
   regression_variables <- c("P2C.multi1","RVPI_1","Holding_Period","Time2Exit","Time2Exit_ZS","ZombieStage","ML_HYOAS.quarter","MSCI.Multiple.Exit_1")
   G.p2c <- G.p2c[complete.cases(G.p2c[,regression_variables]),]
   
-  # delete young entries (bias correction?)
+  # delete young entries (bias correction)
   G.p2c <- G.p2c[G.p2c$Investment_Date < as.Date("2010-01-01"), ]
   # filter by RVPI
   G.p2c <- G.p2c[G.p2c$RVPI_1 > -0.9, ]
@@ -64,11 +64,12 @@ if(FALSE) {
   
   summary(G.p2c$P2C.multi1[G.p2c$P2C.multi1 > 0])
   
+} else {
+  setwd(wd$data)
+  G.p2c <- readRDS("df_all1.RDS")
+  # G.p2c <- G.p2c[G.p2c$Fund_Region == "US", ]
 }
 
-setwd(wd$data)
-G.p2c <- readRDS("df_all1.RDS")
-# G.p2c <- G.p2c[G.p2c$Fund_Region == "US", ]
 
 sample.subset <- function(fund.type, df) {
   df <- df[df$Fund_InvestTypes %in% c(fund.type), ]
@@ -94,26 +95,20 @@ list(First_Entry_Date = min(G.p2c$Investment_Date),
 ## Fit Joint Model <<<< ------------
 library(gamlss)
 library(VineCopula)
-# final.result <- list()
 
-hurdle0 <- 0
+hurdle0 <- 0 # truncation for zero hurdle unnecessary
 gamlss.tr::gen.trun(par = hurdle0, family = GA, name = "tr", type = "left")
 gamlss.tr::gen.trun(par = hurdle0, family = GG, name = "tr", type = "left")
 gamlss.tr::gen.trun(par = hurdle0, family = BCTo, name = "tr", type = "left")
-
-
-G.p2c$P2C.multi1.discounted <- G.p2c$P2C.multi1 / (G.p2c$MSCI.Multiple.Exit_1 + 1)
-sun(G.p2c$P2C.multi1.discounted)
 
 estimate.bi.model <- function(f.type) {
   no.iterations <- 1000
   final.result <- list()
   
-  # f.type <- "BO"
-  response1 <- "P2C.multi1.discounted"
+  response1 <- "P2C.multi1"
 
-  predictors_0 <- c("RVPI_1","Holding_Period","ML_HYOAS.quarter", "MSCI.Multiple.Exit_1", "I(CMA.Index.Multi-1)")
-  predictors_1mu <- c("RVPI_1","Holding_Period", "Time2Exit", "ML_HYOAS.quarter", "MSCI.Multiple.Exit_1", "I(CMA.Index.Multi-1)")
+  predictors_0 <- c("RVPI_1", "Holding_Period", "ML_HYOAS.quarter", "MSCI.Multiple.Exit_1")
+  predictors_1mu <- c("Time2Exit", "Holding_Period", "ML_HYOAS.quarter", "MSCI.Multiple.Exit_1")
   predictors_1sigma <- c("Holding_Period", "Time2Exit")
 
   formula0 <- as.formula(paste("hurdle0", paste(predictors_0, collapse=" + "), sep=" ~ "))
@@ -129,12 +124,12 @@ estimate.bi.model <- function(f.type) {
     m0.full <- gamlss(formula0, data = G.p2c[G.p2c$Fund_InvestTypes == f.type, !(colnames(G.p2c) %in% c("Ev", "Ev2", "MOIC.dyn", "MOIC.end"))], family = BI(mu.link = logit))
     m1.full <- gamlss(formula1, sigma.formula = formula1sigma, 
                       data = subset(G.p2c[, !(colnames(G.p2c) %in% c("Ev", "Ev2", "MOIC.dyn", "MOIC.end"))], 
-                                    hurdle0 == 1 & Fund_InvestTypes == f.type), family = GA)
+                                    hurdle0 == 1 & Fund_InvestTypes == f.type), family = GAtr)
     
     m0.entryexit <- gamlss(formula0, data = G.p2c[G.p2c$Holding_Period == 0 &  G.p2c$Fund_InvestTypes == f.type, !(colnames(G.p2c) %in% c("Ev", "Ev2", "MOIC.dyn", "MOIC.end"))], family = BI(mu.link = logit))
     m1.entryexit <- gamlss(formula1, sigma.formula = formula1sigma, 
                            data = subset(G.p2c[G.p2c$Holding_Period == 0, !(colnames(G.p2c) %in% c("Ev", "Ev2", "MOIC.dyn", "MOIC.end"))], 
-                                         hurdle0 == 1 & Fund_InvestTypes == f.type), family = GA)
+                                         hurdle0 == 1 & Fund_InvestTypes == f.type), family = GAtr)
     
     full.entry2exit.list$m0.full <- m0.full
     full.entry2exit.list$m1.full <- m1.full
@@ -331,24 +326,22 @@ estimate.bi.model <- function(f.type) {
     return(final.result)
   }
 }
-if(TRUE) {
+if(FALSE) {
   system.time(bo.GA <- estimate.bi.model("BO"))
   system.time(vc.GA <- estimate.bi.model("VC"))
+  setwd(wd$data.out)
+  saveRDS(bo.GA, "multiple_bo.GA20200508.RDS")
+  saveRDS(vc.GA, "multiple_vc.GA20200508.RDS")
 } else {
-  setwd(wd$csv)
-  # saveRDS(bo.GA, "bo.GA20200507.RDS")
-  # saveRDS(vc.GA, "vc.GA20200507.RDS")
-  bo.GA <- readRDS("bo.GA20181026.RDS")
-  vc.GA <- readRDS("vc.GA20181026.RDS")
+  setwd(wd$data.out)
+  bo.GA <- readRDS("multiple_bo.GA20200508.RDS")
+  vc.GA <- readRDS("multiple_vc.GA20200508.RDS")
 }
 
 summary(bo.GA$full.entry2exit$m1.full)
 summary(bo.GA$full.entry2exit$m1.entryexit)
 summary(vc.GA$full.entry2exit$m1.full)
 summary(vc.GA$full.entry2exit$m1.entryexit)
-
-term.plot(bo.GA$full.entry2exit$m1.full)
-term.plot(vc.GA$full.entry2exit$m1.full)
 
 bo.GA$coefs$copCON
 vc.GA$coefs$copCON
@@ -391,7 +384,6 @@ plot.pairs <- function(df, do_eps = FALSE, name = "") {
 # plot.pairs(bo.GA$CopDF, name = "BO") 
 # plot.pairs(vc.GA$CopDF, name = "VC")
 
-
 # View Results <<<<<<<< ---------
 coefs <- bo.GA$coefs
 coefs <- vc.GA$coefs
@@ -399,65 +391,25 @@ round(coefs$m0$mu$Mean ,3)
 round(coefs$m0$mu$SD ,3)
 round(coefs$m1$mu$Mean ,3)
 round(coefs$m1$mu$SD ,3)
-round(coefs$m1$sigma$Mean ,3)
-round(coefs$m1$sigma$SD ,3)
+round(coefs$m1$sigma$Mean, 3)
+round(coefs$m1$sigma$SD, 3)
 
 vc.GA$BAIC
+bo.GA$BAIC
 
-# setwd(wd$csv) ; saveRDS(bo.GA, "bo.GA20181026.RDS")
-# setwd(wd$csv) ; saveRDS(vc.GA, "vc.GA20181026.RDS")
-
-coef2part <- list()
-coef2part$BO$m0mu <- bo.GA$coefs$m0$mu$Mean
-coef2part[["BO"]][["m1mu"]] <- bo.GA$coefs$m1$mu$Mean
-coef2part[["BO"]][["m1sigma"]] <- bo.GA$coefs$m1$sigma$Mean
-coef2part$BO$joe.para <- bo.GA$coefs$copCON$Mean
-
-coef2part[["VC"]][["m0mu"]] <- vc.GA$coefs$m0$mu$Mean
-coef2part[["VC"]][["m1mu"]] <- vc.GA$coefs$m1$mu$Mean
-coef2part[["VC"]][["m1sigma"]] <- vc.GA$coefs$m1$sigma$Mean
-coef2part$VC$joe.para <- vc.GA$coefs$copCON$Mean
-
-copula2part$coef2part <- coef2part
-
-# Predict Multiple <<<< -------
-setwd(wd$code)
-source("ExitDynamics_Bivariate.R")
-df.out <- simulate$Timing.Simulator(simulate$create.sim.input(), simulate$create.public.scenario())
-copula.in <- simulate$TM.copula(nrow(df.out), "Joe180", coef2part$VC$joe.para)
-
-copula2part$logit2prob <- function(logit){
-  odds <- exp(logit)
-  prob <- odds / (1 + odds)
-  return(prob)
+make.coef2part <- function() {
+  coef2part <- list()
+  coef2part$BO$m0mu <- bo.GA$coefs$m0$mu$Mean
+  coef2part[["BO"]][["m1mu"]] <- bo.GA$coefs$m1$mu$Mean
+  coef2part[["BO"]][["m1sigma"]] <- bo.GA$coefs$m1$sigma$Mean
+  coef2part$BO$joe.para <- bo.GA$coefs$copCON$Mean
+  
+  coef2part[["VC"]][["m0mu"]] <- vc.GA$coefs$m0$mu$Mean
+  coef2part[["VC"]][["m1mu"]] <- vc.GA$coefs$m1$mu$Mean
+  coef2part[["VC"]][["m1sigma"]] <- vc.GA$coefs$m1$sigma$Mean
+  coef2part$VC$joe.para <- vc.GA$coefs$copCON$Mean
+  
+  return(coef2part)
 }
 
-copula2part$predict.2part <- function(U.multiple = copula.in, sim_in = df.out) {
-  multi.list <- list()
-  for(i in 1:nrow(sim_in)) {
-    fund.type <- as.character(sim_in[i, "Type"])
-    x_zero <- as.numeric(c(1, sim_in[i, c("RVPI_1", "Holding_Period", "ML_HYOAS.quarter", "MSCI.Multiple.Exit_1", "CMA.Multiple.Exit_1")]))
-    m0mu <- coef2part[[fund.type]]$m0mu %*% x_zero
-    m1mu <- coef2part[[fund.type]]$m1mu %*% as.numeric(c(1, sim_in[i, c("ML_HYOAS.quarter", "MSCI.Multiple.Exit_1", "CMA.Multiple.Exit_1")]))
-    m1sigma <- coef2part[[fund.type]]$m1sigma %*% as.numeric(c(1, sim_in[i, c("Holding_Period", "Time2Exit")]))
-    
-    default.prob <- 1 - copula2part$logit2prob(m0mu)
-   #  U <- U.multiple$Multiple[i]
-    U <- runif(1) # default and non-default are conditionally independent
-    
-    if (U > default.prob) {
-      # U.scaled <- (U - default.prob) / (1 - default.prob)
-      U.scaled <- U.multiple$Multiple[i]
-      multi <- gamlss.dist::qGA(U.scaled, mu = exp(m1mu), sigma = exp(m1sigma))
-    } else {
-      multi <- 0
-    }
-    multi.list[i] <- multi
-  }
-  return(as.numeric(unlist(multi.list)))
-}
-copula2part$predict.2part()
-## x) Attach new environment -----
-while("copula2part" %in% search())
-  detach("copula2part")
-attach(copula2part)
+copula2part$coef2part <- make.coef2part()
