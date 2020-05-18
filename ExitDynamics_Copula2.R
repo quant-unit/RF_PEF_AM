@@ -101,6 +101,9 @@ gamlss.tr::gen.trun(par = hurdle0, family = GA, name = "tr", type = "left")
 gamlss.tr::gen.trun(par = hurdle0, family = GG, name = "tr", type = "left")
 gamlss.tr::gen.trun(par = hurdle0, family = BCTo, name = "tr", type = "left")
 
+f <- function(x) x * dGAtr(x, mu = 3, sigma = 2)
+integrate(f, 0.000001, 1000)
+
 estimate.bi.model <- function(f.type) {
   no.iterations <- 1000
   final.result <- list()

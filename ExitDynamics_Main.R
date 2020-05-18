@@ -22,20 +22,22 @@ dir.create(wd$eps2)
 
 setwd(wd$code)
 source("Useful_Functions.R")
-library(dplyr)
 
-create.eps <- TRUE
+# packages used
+library(dplyr)
+library(xtable)
+library(latex2exp)
+library(gamlss)
+library(gamlss.tr)
+library(VineCopula)
+library(copula)
+
+create.eps <- FALSE
 create.csv <- FALSE
 ## 00) Load & Reduce Input Data ------
-if(TRUE) {
-  #source("ExitDynamics_Data_Prep.R")
-  setwd(wd$data.out)
-  load("ExitDynamics_Data_V3.RData")
-} else {
-  # old - outdated
-  setwd(wd$data)
-  load("ExitDynamics_Data_V1.RData")
-}
+setwd(wd$data.out)
+load("ExitDynamics_Data_V3.RData")
+
 
 g.p2c2 <- g.p2c2[g.p2c2$Fund_InvestTypes %in% c("BO", "VC"), ]
 colnames(g.p2c2)
@@ -336,69 +338,32 @@ setwd(wd$code)
 source("ExitDynamics_Bivariate.R")
 
 set.seed(98)
-system.time(x <- simulate$Final.Simulator(5000, N = c(3, 15), "VC"))
+system.time(x <- simulate$Final.Simulator(5000, N = c(3, 15), c(2, 8), "VC"))
 setwd(wd$data.out)
 saveRDS(x, "test_simulation_result_newPubSce.RDS")
 x <- readRDS("test_simulation_result_newPubSce.RDS")
 
-tail(x$PublicScenario)
-x$Output$N_3$independent
-x$df.out$N_3$independent
-cf2quantiles <- function(list.in, no.companies) {
-  q.seq <- seq(0,1,0.01)
-  df.N3 <- data.frame(do.call(rbind, list.in)) / no.companies
-  df.N3 <- data.frame(apply(df.N3, 2, function(x){quantile(x, q.seq)}))
-  
-  if(create.eps){
-    par.old <- par()
-    old.wd <- getwd()
-    setwd(wd$eps)
-    setEPS()
-    postscript(paste("Simulation_ECDF_",no.companies , "_companies.eps",sep=""), 
-               width = 3, height = 2.5, family = "Helvetica", pointsize = 3)
-  }
-  #par(cex = 1.5, mar = c(4.5, 4.5, 1, 1))
-  plot(df.N3[, paste("X", 5, sep="")], q.seq, xlim = c(0,5), type = "l",
-       # main = paste(no.companies,"company VC fund"),
-       xlab = "Cumulative cash flow per current value", 
-       ylab = "ECDF")
-  lines(df.N3[, paste("X", 10, sep="")], q.seq, lty = 2)
-  abline(h = seq(0,1,0.1), col= "grey", lty = 3) ; abline(v=seq(0,10,1), col ="grey", lty = 3)
-  legend("bottomright", bty = "n", legend = c("Horizon:", "5 years", "10 years"), 
-         lty = c(NA, 1,2 ))
-  invisible(df.N3)
-  
-  if(create.eps) {
-    dev.off()
-    setwd(old.wd)
-    par(par.old)
-  }
-}
-df.3companies <- cf2quantiles(x$df.out$N_3$independent, 3)
-df.15companies <- cf2quantiles(x$df.out$N_15$independent, 15)
-
+# create EPS
 if(TRUE) {
   old.wd <- getwd()
   create.eps <- FALSE 
   setwd(wd$eps)
   setEPS()
   postscript("Simulation-Combi.eps", 
-             width = 5, height = 2, 
+             width = 5, height = 3.5, 
              family = "Helvetica", pointsize = 1)
   
-  par(mfrow=c(1,2), mar = c(4.5, 4.5, 1.0, 1.0), cex=1.2)
+  par(mfrow=c(2,2), mar = c(4.5, 4.5, 1.0, 1.0), cex=1.2)
   
-  df.3companies <- cf2quantiles(x$df.out$N_3$independent, 3)
-  df.15companies <- cf2quantiles(x$df.out$N_15$independent, 15)
+  df.3companies <- simulate$cf2quantiles(x$df.out$N_3_Age_2$Joe180, 3, 2)
+  df.15companies <- simulate$cf2quantiles(x$df.out$N_15_Age_2$Joe180, 15, 2)
+  df.3companies <- simulate$cf2quantiles(x$df.out$N_3_Age_8$Joe180, 3, 8)
+  df.15companies <- simulate$cf2quantiles(x$df.out$N_15_Age_8$Joe180, 15, 8)
   
   dev.off() 
   setwd(old.wd)  
 }
 
-df.3companies["10%", c("X5")]
-df.15companies["10%", c("X5")]
-df.3companies["90%", c("X10")]
-df.15companies["90%", c("X10")]
 
 for(pfs in names(x$Output)){
   df.summary <- data.frame(sapply(x$Output[[pfs]], sun))

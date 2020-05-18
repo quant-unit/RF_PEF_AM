@@ -20,3 +20,5 @@ EPS_output_small/
 data_in/
 data_out/
 outdated/
+
+*.Rhistory

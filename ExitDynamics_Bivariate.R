@@ -6,18 +6,20 @@ simulate <- new.env()
 
 ## A) Input Data ------
 simulate$create.sim.input <- function(no_companies = 10, type = "VC", 
-                                      today = "2016-12-31", do.random = FALSE){
+                                      today = "2016-12-31", do.random = FALSE, 
+                                      deal.age = 2){
   if(do.random){
     df <- data.frame(CompanyAge =  rpois(no_companies, 3),
                      Type = rep(type, no_companies),
                      TVPI = rlnorm(no_companies,0,0.5))
     df$RVPI <- df$TVPI * runif(no_companies, 0.5, 1)
   }else{
-    df <- data.frame(CompanyAge = rep(5, no_companies), # rpois(no_companies, 3),
+    df <- data.frame(CompanyAge = rep(deal.age, no_companies), # rpois(no_companies, 3),
                      Type = rep(type, no_companies),
                      TVPI = rep(1.5, no_companies))
     df$RVPI <- df$TVPI - 0.5
   }
+  df$CompanyAge[1] <- 8
   
   ApproxCompanyStartDate <- as.Date(today) - 365 * df$CompanyAge
   pos <- sapply(ApproxCompanyStartDate, function(y){
@@ -33,16 +35,14 @@ simulate$create.sim.input()
 
 ## B) Public Scenario  -----
 set.seed(99)
-public.data$Global.CMA <- rnorm(nrow(public.data),0,0.02)
 simulate$create.public.scenario <- function(periods = 12 * 20, upto = "2016-12-31"){
   # empirical past
   upto <- as.Date(upto)
-  indices <- c("Date", "ML_HYOAS", "MSCI_monthly_return", "Global.CMA")
+  indices <- c("Date", "ML_HYOAS", "MSCI_monthly_return")
   em.past <- public.data[public.data$Date <= upto, indices]
   em.past$MSCI.Multiple.Exit_1 <- 0
   em.past$ML_HYOAS.quarter <- 0.05
-  em.past$CMA.Multiple.Exit_1 <- 0
-  
+
   # future scenario
   public.scenario <- public.data[complete.cases(public.data), indices]
 
@@ -50,8 +50,7 @@ simulate$create.public.scenario <- function(periods = 12 * 20, upto = "2016-12-3
   public.scenario$Date <- seq.Date(as.Date(upto) + 1, by = "month", length.out = periods) - 1
   
   public.scenario$MSCI.Multiple.Exit_1 <- exp(cumsum(log(1 + public.scenario$MSCI_monthly_return))) - 1
-  public.scenario$CMA.Multiple.Exit_1 <- exp(cumsum(log(1 + public.scenario$Global.CMA))) - 1
-  
+
   public.scenario$ML_HYOAS.quarter <- public.scenario$ML_HYOAS[1]
   
   # combine past and future
@@ -177,7 +176,7 @@ simulate$Timing.Simulator <- function(df.pr, df.pu, U.timing = runif(nrow(df.pr)
                    CompanyStartDate = df.pr$CompanyStartDate[i],
                    Type = df.pr$Type[i],
                    df.timing = df.pu)
-    timing.list[[i]] <- Timing.sim[,c("MSCI.Multiple.Exit_1", "CMA.Multiple.Exit_1", "ML_HYOAS.quarter", "d", "Time2Exit", "Date")]
+    timing.list[[i]] <- Timing.sim[,c("MSCI.Multiple.Exit_1", "ML_HYOAS.quarter", "d", "Time2Exit", "Date")]
   }
   timing.list <- data.frame(do.call(rbind, timing.list))
   df.pr <- cbind(df.pr, timing.list)
@@ -235,12 +234,12 @@ simulate$predict.2part <- function(U.multiple, sim_in) {
     
     default.prob <- 1 - simulate$logit2prob(m0mu)
     #  U <- U.multiple$Multiple[i]
-    U <- runif(1) # default and non-default are conditionally independent
+    U <- runif(1) # default and non-default part are conditionally independent
     
     if (U > default.prob) {
       # U.scaled <- (U - default.prob) / (1 - default.prob)
       U.scaled <- U.multiple$Multiple[i]
-      multi <- gamlss.dist::qGA(U.scaled, mu = exp(m1mu), sigma = exp(m1sigma))
+      multi <- qGAtr(U.scaled, mu = exp(m1mu), sigma = exp(m1sigma))
     } else {
       multi <- 0
     }
@@ -254,7 +253,8 @@ copula.in <- simulate$TM.copula(nrow(df.out), "Joe180", 1.1)
 
 simulate$predict.2part(copula.in, df.out)
 
-simulate$Final.Simulator <- function(iterations, N, Type, fixed.pub.sce = TRUE){
+## 3) Final Simulation Example -----
+simulate$Final.Simulator <- function(iterations, N, deal.ages, Type, fixed.pub.sce = TRUE){
   all_out <- list()
   # fixed public scenario
   if(fixed.pub.sce){
@@ -264,57 +264,98 @@ simulate$Final.Simulator <- function(iterations, N, Type, fixed.pub.sce = TRUE){
   }
 
   for(element.N in N){
-    print(paste(element.N, "company portfolio"))
-    # fixed private portfolio
-    df.companies <- simulate$create.sim.input(element.N, Type)
-    all_out$PF[[paste("N", element.N, sep ="_")]] <- df.companies
-    print(df.companies)
-    
-    corner.list <- list()
-    df.out.list2 <- list()
-    for(corner in c("independent", "Joe180")){
-      print(corner)
-      final.multiple <- list()
-      df.out.list1 <- list()
-      for(i in seq(iterations)){
-        # Dynamic Public Scenario
-        if(!fixed.pub.sce){
-          pub.sce <- simulate$create.public.scenario()
+    for(deal.age in deal.ages) {
+      print(paste(element.N, "company portfolio"))
+      # fixed private portfolio
+      df.companies <- simulate$create.sim.input(element.N, Type, deal.age = deal.age)
+      all_out$PF[[paste("N", element.N, sep ="_")]] <- df.companies
+      print(df.companies)
+      
+      corner.list <- list()
+      df.out.list2 <- list()
+      for(corner in c("independent", "Joe180")){
+        print(corner)
+        final.multiple <- list()
+        df.out.list1 <- list()
+        for(i in seq(iterations)){
+          # Dynamic Public Scenario
+          if(!fixed.pub.sce){
+            pub.sce <- simulate$create.public.scenario()
+          }
+          
+          # Copula
+          joe.para <- ifelse(df.companies$Type == "VC", 
+                             copula2part$coef2part$VC$joe.para,
+                             copula2part$coef2part$BO$joe.para)
+          U.copula <- simulate$TM.copula(nrow(df.companies), corner, joe.para)
+          
+          # Timing 
+          df.out <- simulate$Timing.Simulator(df.pr = df.companies,
+                                              df.pu = pub.sce,
+                                              U.timing = U.copula$Timing)
+          
+          # Multiple
+          df.out$Multiple <- simulate$predict.2part(U.multiple = U.copula, sim_in = df.out)
+          
+          # Result
+          # round_df(df.out, 3)
+          
+          # Cash Flow on Current NAV
+          final.multiple[[i]] <- sum(df.out$RVPI / sum(df.out$RVPI) * df.out$Multiple)
+          df.out.list1[[i]] <- simulate$df.out2cumcf(df.out)
         }
         
-        # Copula
-        joe.para <- ifelse(df.companies$Type == "VC", 
-                           copula2part$coef2part$VC$joe.para,
-                           copula2part$coef2part$BO$joe.para)
-        U.copula <- simulate$TM.copula(nrow(df.companies), corner, joe.para)
-
-        # Timing 
-        df.out <- simulate$Timing.Simulator(df.pr = df.companies,
-                                   df.pu = pub.sce,
-                                   U.timing = U.copula$Timing)
+        final.multiple <- unlist(final.multiple)
+        corner.list[[corner]] <- final.multiple
+        df.out.list2[[corner]]  <- df.out.list1
         
-        # Multiple
-        df.out$Multiple <- simulate$predict.2part(U.multiple = U.copula, sim_in = df.out)
-        
-        # Result
-        # round_df(df.out, 3)
-        
-        # Cash Flow on Current NAV
-        final.multiple[[i]] <- sum(df.out$RVPI / sum(df.out$RVPI) * df.out$Multiple)
-        df.out.list1[[i]] <- simulate$df.out2cumcf(df.out)
       }
-      
-      final.multiple <- unlist(final.multiple)
-      corner.list[[corner]] <- final.multiple
-      df.out.list2[[corner]]  <- df.out.list1
-      
+      all_out$Output[[paste("N", element.N, "Age", deal.age, sep ="_")]] <- corner.list
+      all_out$df.out[[paste("N", element.N, "Age", deal.age, sep ="_")]] <- df.out.list2
     }
-    all_out$Output[[paste("N", element.N, sep ="_")]] <- corner.list
-    all_out$df.out[[paste("N", element.N, sep ="_")]] <- df.out.list2
   }
   
   return(all_out)
 }
-x <- simulate$Final.Simulator(5, c(3, 15), "VC")
+x <- simulate$Final.Simulator(5, c(3, 15), c(2, 8), "VC")
 
+simulate$cf2quantiles <- function(list.in, no.companies, deal.age) {
+  q.seq <- seq(0,1,0.01)
+  df.N3 <- data.frame(do.call(rbind, list.in)) / no.companies
+  df.N3 <- data.frame(apply(df.N3, 2, function(x){quantile(x, q.seq)}))
+  
+  if(create.eps){
+    par.old <- par()
+    old.wd <- getwd()
+    setwd(wd$eps)
+    setEPS()
+    postscript(paste("Simulation_ECDF_",no.companies , "_companies_", deal.age, "age.eps",sep=""), 
+               width = 3, height = 2.5, family = "Helvetica", pointsize = 3)
+  }
+  #par(cex = 1.5, mar = c(4.5, 4.5, 1, 1))
+  plot(df.N3[, paste("X", 5, sep="")], q.seq, xlim = c(0,5), type = "l",
+       # main = paste(no.companies,"company VC fund"),
+       xlab = "Cumulative cash flow per current value", 
+       ylab = "ECDF")
+  lines(df.N3[, paste("X", 10, sep="")], q.seq, lty = 2)
+  abline(h = seq(0,1,0.1), col= "grey", lty = 3) ; abline(v=seq(0,10,1), col ="grey", lty = 3)
+  legend("bottomright", bty = "n", legend = c(paste0(no.companies, " deals"), 
+                                              paste0("age: ", deal.age), 
+                                              "Horizon:", "5 years", "10 years"), 
+         lty = c(NA, NA, NA, 1,2))
+  #legend("topleft", bty = "n", legend = paste0("n", no.companies, "a", deal.age))
+  return(df.N3)
+  
+  if(create.eps) {
+    dev.off()
+    setwd(old.wd)
+    par(par.old)
+  }
+}
+df.3companies <- simulate$cf2quantiles(x$df.out$N_3_Age_2$Joe180, 3, 2)
+df.15companies <- simulate$cf2quantiles(x$df.out$N_15_Age_2$Joe180, 15, 2)
 
+df.3companies["10%", c("X5")]
+df.15companies["10%", c("X5")]
+df.3companies["90%", c("X10")]
+df.15companies["90%", c("X10")]
