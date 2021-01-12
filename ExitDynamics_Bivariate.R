@@ -233,6 +233,7 @@ simulate$predict.2part <- function(U.multiple, sim_in) {
     m1sigma <- copula2part$coef2part[[fund.type]]$m1sigma %*% as.numeric(c(1, sim_in[i, names_sigma]))
     
     default.prob <- 1 - simulate$logit2prob(m0mu)
+    # print(paste("default.prob", default.prob))
     #  U <- U.multiple$Multiple[i]
     U <- runif(1) # default and non-default part are conditionally independent
     

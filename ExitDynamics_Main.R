@@ -42,6 +42,11 @@ load("ExitDynamics_Data_V3.RData")
 g.p2c2 <- g.p2c2[g.p2c2$Fund_InvestTypes %in% c("BO", "VC"), ]
 colnames(g.p2c2)
 
+# How many syndicated/club deals?
+g.syn <- g.sum[g.sum$Company_ID %in% g.sum$Company_ID[duplicated(g.sum$Company_ID)], ]
+g.syn$SynID <- paste(g.syn$Company_ID, g.syn$InvDate, g.syn$ExitDate)
+length(g.syn$SynID[duplicated(g.syn$SynID)]) / nrow(g.syn)
+
 g.sum <- g.sum[g.sum$Type %in% c("BO", "VC"), 
                c("Type", "Fund_ID", "InvDate", "ExitDate", "YearInvest", "Vintage", "MOIC")]
 g.sum$ExitYear <- as.factor(format(g.sum$ExitDate, "%Y"))
@@ -342,6 +347,23 @@ system.time(x <- simulate$Final.Simulator(5000, N = c(3, 15), c(2, 8), "VC"))
 setwd(wd$data.out)
 saveRDS(x, "test_simulation_result_newPubSce.RDS")
 x <- readRDS("test_simulation_result_newPubSce.RDS")
+
+
+# Table: Final Multiples
+quants <- c(0.005, 0.01, 0.05, 0.5)
+xtable::xtable(
+  data.frame(
+    N3_A2 = quantile(x$Output$N_3_Age_2$Joe180, quants),
+    N3_A8 = quantile(x$Output$N_3_Age_8$Joe180, quants),
+    N15_A2 = quantile(x$Output$N_15_Age_2$Joe180, quants),
+    N15_A8 = quantile(x$Output$N_15_Age_8$Joe180, quants)
+  ), digits = 4,
+  label = c("tab:final_multiples"),
+  caption = c("CFaR with infinite horizon (i.e., final fund multiple) for VC funds from table XXX. 
+              VC funds with more deals and longer realized holding periods are gauged safer by our model.")
+)
+
+
 
 # create EPS
 if(TRUE) {
