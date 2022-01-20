@@ -7,7 +7,7 @@ simulate <- new.env()
 ## A) Input Data ------
 simulate$create.sim.input <- function(no_companies = 10, type = "VC", 
                                       today = "2016-12-31", do.random = FALSE, 
-                                      deal.age = 2){
+                                      deal.age = 2, max.deal.age = NA){
   if(do.random){
     df <- data.frame(CompanyAge =  rpois(no_companies, 3),
                      Type = rep(type, no_companies),
@@ -19,7 +19,10 @@ simulate$create.sim.input <- function(no_companies = 10, type = "VC",
                      TVPI = rep(1.5, no_companies))
     df$RVPI <- df$TVPI - 0.5
   }
-  df$CompanyAge[1] <- 8
+  if(!is.na(max.deal.age)) {
+    # so that all funds have same vintage year
+    df$CompanyAge[1] <- max.deal.age 
+  }
   
   ApproxCompanyStartDate <- as.Date(today) - 365 * df$CompanyAge
   pos <- sapply(ApproxCompanyStartDate, function(y){
@@ -35,7 +38,7 @@ simulate$create.sim.input()
 
 ## B) Public Scenario  -----
 set.seed(99)
-simulate$create.public.scenario <- function(periods = 12 * 20, upto = "2016-12-31"){
+simulate$create.public.scenario <- function(periods = 12 * 20, upto = "2016-12-31", use.hist.average=FALSE){
   # empirical past
   upto <- as.Date(upto)
   indices <- c("Date", "ML_HYOAS", "MSCI_monthly_return")
@@ -49,9 +52,17 @@ simulate$create.public.scenario <- function(periods = 12 * 20, upto = "2016-12-3
   public.scenario <- public.scenario[sample(nrow(public.scenario), periods, replace = TRUE), ]
   public.scenario$Date <- seq.Date(as.Date(upto) + 1, by = "month", length.out = periods) - 1
   
+  if(use.hist.average) {
+    public.scenario$ML_HYOAS <- mean(em.past$ML_HYOAS, na.rm = TRUE)
+    public.scenario$MSCI_monthly_return <- mean(em.past$MSCI_monthly_return, na.rm = TRUE)
+    
+    public.scenario$ML_HYOAS.quarter <- public.scenario$ML_HYOAS[1]
+  } else {
+    public.scenario$ML_HYOAS.quarter <- public.scenario$ML_HYOAS
+  }
+  
   public.scenario$MSCI.Multiple.Exit_1 <- exp(cumsum(log(1 + public.scenario$MSCI_monthly_return))) - 1
 
-  public.scenario$ML_HYOAS.quarter <- public.scenario$ML_HYOAS[1]
   
   # combine past and future
   out <- rbind(em.past, public.scenario[-1, ])
@@ -255,20 +266,25 @@ copula.in <- simulate$TM.copula(nrow(df.out), "Joe180", 1.1)
 simulate$predict.2part(copula.in, df.out)
 
 ## 3) Final Simulation Example -----
-simulate$Final.Simulator <- function(iterations, N, deal.ages, Type, fixed.pub.sce = TRUE){
+simulate$Final.Simulator <- function(iterations, N, deal.ages, Type, 
+                                     fixed.pub.sce = TRUE, 
+                                     use.hist.average = FALSE, # just used if fixed.pub.sce == TRUE
+                                     base.on.same.vintage = TRUE){
   all_out <- list()
   # fixed public scenario
   if(fixed.pub.sce){
-    pub.sce <- simulate$create.public.scenario()
+    pub.sce <- simulate$create.public.scenario(use.hist.average = use.hist.average)
     all_out$PublicScenario <- pub.sce
     print(tail(pub.sce))
   }
-
+  
+  max.deal.age <- ifelse(base.on.same.vintage, max(deal.ages), NA) 
+  
   for(element.N in N){
     for(deal.age in deal.ages) {
       print(paste(element.N, "company portfolio"))
       # fixed private portfolio
-      df.companies <- simulate$create.sim.input(element.N, Type, deal.age = deal.age)
+      df.companies <- simulate$create.sim.input(element.N, Type, deal.age = deal.age, max.deal.age = max.deal.age)
       all_out$PF[[paste("N", element.N, sep ="_")]] <- df.companies
       print(df.companies)
       

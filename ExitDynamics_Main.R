@@ -366,9 +366,8 @@ xtable::xtable(
 
 
 # create EPS
-if(TRUE) {
+if(create.eps) {
   old.wd <- getwd()
-  create.eps <- FALSE 
   setwd(wd$eps)
   setEPS()
   postscript("Simulation-Combi.eps", 
@@ -400,5 +399,84 @@ for(pfs in names(x$Output)){
 x$Output
 
 x$CSV
+## X) Simulate bigger ------
+par(par_default)
+setwd(wd$code)
+source("ExitDynamics_Bivariate.R")
+
+pofo.sizes <- c(seq(1,15), 30, 60, 100, 150, 250, 500)
+ages <- c(1, 5, 9)
+
+set.seed(98)
+x <- list()
+for (type in c("BO", "VC")) {
+  x[[type]] <- simulate$Final.Simulator(iterations = 5000, 
+                                        N = pofo.sizes, 
+                                        deal.ages = ages, 
+                                        Type = type, 
+                                        fixed.pub.sce = FALSE,
+                                        # use.hist.average = TRUE,
+                                        base.on.same.vintage = FALSE)
+}
+setwd(wd$data.out)
+saveRDS(x, "test_simulation_result_newPubSce_BIG.RDS")
+x <- readRDS("test_simulation_result_newPubSce_BIG.RDS")
+
+# public scenarios for BO and VC differ
+tail(x$BO$PublicScenario)
+tail(x$VC$PublicScenario)
+
+plot.quantiles <- function(fund.type = "BO", age=5, quantiles = c(0.01, 0.05, 0.1, 0.5, 0.9)) {
+  l <- list()
+  for (n in pofo.sizes) {
+    y <- x[[fund.type]]$Output[[paste0("N_", n ,"_Age_", age)]]$Joe180
+    y <- quantile(y, quantiles)
+    df <- data.frame(N = n)
+    for (i in 1:length(y)) {
+      col <- paste("Q", names(y)[i])
+      df[, col] <- y[i]
+    }
+    l[[paste(n)]] <- df
+  }
+  df <- data.frame(do.call(rbind, l))
+  
+  chart.name <- paste0(fund.type, " (deal age: ", age, ")")
+  
+  # plot
+  plot(df$N, df[, 2], type="l", ylim=c(-1, 5), 
+       ylab="Multiple", 
+       #        main = chart.name,
+       xlab="Deals in Portfolio"
+       )
+  for (i in 2:(length(quantiles))) {
+    points(df$N, df[, i + 1], type="l", col=i)
+  }
+  abline(h=c(1,2), col="grey", lty=2)
+  legend("bottomright", bty = "n", cex=0.5,
+         legend = paste(sort(quantiles, TRUE), "quantile"), col = length(quantiles):1, lty = 1)
+  
+  legend("topright", bty="n", legend = chart.name)
+}
+
+# create EPS
+if(create.eps) {
+  old.wd <- getwd()
+  setwd(wd$eps)
+  setEPS()
+  postscript("Simulation-Bigger-Random-Public.eps", 
+             width = 5, height = 3.5, 
+             family = "Helvetica", pointsize = 1)
+  
+  par(mfrow=c(2,2), mar = c(4.5, 4.5, 1.0, 1.0), cex=1.2)
+  
+  plot.quantiles("BO", age=1)
+  plot.quantiles("BO", age=9)
+  plot.quantiles("VC", age=1)
+  plot.quantiles("VC", age=9)
+  
+  dev.off() 
+  setwd(old.wd)  
+}
+
 ## 5) Epilogue -----
 sessionInfo()
