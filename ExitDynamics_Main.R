@@ -181,6 +181,17 @@ empirical.timing.multiple("big")
 empirical.timing.multiple("small")
 empirical.timing.multiple("bigger")
 
+empirical.multiple <- function() {
+  st.vc <- ecdf(g.sum$MOIC[g.sum$Type == "VC"])
+  
+  par(mfrow = c(1, 1), mar = c(4.5, 4.5, 2, 1), cex = 1.3)
+  plot(st.vc, xlim = c(0, 10),verticals=TRUE, do.points=FALSE, lwd = 2,
+       xlab = "Multiple on invested capital (MOIC)", ylab = "ECDF", main = "Exit Multiple: VC deals")
+  # abline(v=c(0), col = "grey", lty = 2)
+  points(0, st.vc(0), lwd = 2)
+  print(st.vc(0))
+}
+empirical.multiple()
 
 mMMP_chart <- function(size = "big"){
   
